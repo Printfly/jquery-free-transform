@@ -1,5 +1,5 @@
 /**
-* jquery-freetrans.js v1.1
+* jquery-freetrans.js v1.2
 *
 * Copyright (c) 2013 Jonathan Greene (gthmb)
 *
@@ -117,7 +117,6 @@
 
         // private methods
         function _init(sel, options){
-
                 var off = sel.offset();
 
                 sel
@@ -132,16 +131,19 @@
                 // generate all the controls markup
                 var markup = '';
                 markup +=                 '<div class="ft-controls">';
-                markup +=                         '<div class="ft-rotator"></div>';
+                markup +=                         '<div class="ft-rotator print-control-corner" title="Rotate"><span class="designstudio-set02-rotate"></span></div>';
+                markup +=                         '<div class="print-control-corner ui-removable-handle" title="Delete"><span class="designstudio-set02-cross"></span></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-top ft-scaler-left ft-scaler-tl"></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-top ft-scaler-right ft-scaler-tr"></div>';
-                markup +=                         '<div class="ft-scaler ft-scaler-bottom ft-scaler-right ft-scaler-br"></div>';
+                markup +=                         '<div class="print-control-corner ft-scaler ft-scaler-bottom ft-scaler-right ft-scaler-br" title="Resize"><span class="designstudio-set02-resize-diagonal"></span></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-bottom ft-scaler-left ft-scaler-bl"></div>';
-                markup +=                         '<div class="ft-scaler ft-scaler-top ft-scaler-center ft-scaler-tc"></div>';
+                markup +=                         '<div class="ft-scaler ft-scaler-top ft-scaler-center ft-scaler-tc" title="Change Height"><span class="designstudio-set02-resize-parallel"></span></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-bottom ft-scaler-center ft-scaler-bc"></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-mid ft-scaler-left ft-scaler-ml"></div>';
-                markup +=                         '<div class="ft-scaler ft-scaler-mid ft-scaler-right ft-scaler-mr"></div>';
+                markup +=                         '<div class="ft-scaler ft-scaler-mid ft-scaler-right ft-scaler-mr" title="Change Width"><span class="designstudio-set02-resize-parallel"></span></div>';
                 markup +=                         '<div class="ft-scaler ft-scaler-mid ft-scaler-center ft-scaler-mc"></div>';
+                markup +=                         '<div class="print-object-control-edit"><span>Edit</span></div>';
+                markup +=                         '<div class="ui-layers-container"><div class="print-control-corner ui-layers-handle" data-toggle="dropdown" title="Layer Order"><span class="designstudio-set02-layers"></span></div><ul class="ui-layers-dropdown dropdown-menu" role="menu"><li><img src="images/layer/bring-to-front.png" alt="bring to front"><span>Bring to Front</span></li> <li><img src="images/layer/send-to-back.png" alt="send to back"><span>Send to Back</span></li> <li><img src="images/layer/bring-to-front.png" alt="bring to front"><span>Bring Forward</span></li> <li><img src="images/layer/send-backwards.png" alt="send backwards"><span>Send Backwards</span></li> <li><img src="images/layer/copy-to-other-side.png" alt="copy to other side"><span>Copy to Other Side</span></li> </ul> </div>';
                 markup +=                 '</div>';
 
                 var settings = {
@@ -151,6 +153,7 @@
                         scaley: 1,
                         angle: 0,
                         maintainAspectRatio: false,
+                        scaleFromCenter: false,
                         scaleLimit: 0.1,
                         'rot-origin': '50% 50%',
                         _p: {
@@ -193,36 +196,68 @@
                 }
 
                 // translate (aka move)
-                container.bind('mousedown.freetrans', _ifLeft(_noSelect(function(evt) {
+                container.bind('mousedown.freetrans touchstart.freetrans', _ifLeft(_noSelect(function(evt) {
                         var data = sel.data('freetrans');
                         var p = Point(evt.pageX, evt.pageY);
                         var drag = _noSelect(function(evt) {
-                                data.x += evt.pageX - p.x;
-                                data.y += evt.pageY - p.y;
-                                p = Point(evt.pageX, evt.pageY);
+                                if (evt.type === 'touchmove') {
+                                    data.x += evt.originalEvent.touches[0].pageX - p.x;
+                                    data.y += evt.originalEvent.touches[0].pageY - p.y;
+                                    p = Point(evt.originalEvent.touches[0].pageX, evt.originalEvent.touches[0].pageY);
+                                } else {
+                                    data.x += evt.pageX - p.x;
+                                    data.y += evt.pageY - p.y;
+                                    p = Point(evt.pageX, evt.pageY);
+                                }
                                 _draw(sel, data);
+                                sel.trigger('freetrans.moving');
                         });
 
                         var up = function(evt) {
-                                $(document).unbind('mousemove.freetrans', drag);
-                                $(document).unbind('mouseup.freetrans', up);
+                                $(document).unbind('mousemove.freetrans touchmove.freetrans', drag);
+                                $(document).unbind('mouseup.freetrans touchend.freetrans', up);
+                                sel.trigger('freetrans.done');
                         };
 
-                        $(document).bind('mousemove.freetrans', drag);
-                        $(document).bind('mouseup.freetrans', up);
+                        if ($(evt.target).attr('class') && $(evt.target).attr('class').match(/designstudio-set02/i)) {
+                          if ($(evt.target).hasClass('designstudio-set02-layers') && evt.type === 'touchstart') {
+                            $(evt.target).parent('.ui-layers-handle').trigger('click');
+                          }
+                          return false;
+                        }
+
+                        if (evt.type === 'touchstart') {
+                            p = Point(evt.originalEvent.touches[0].pageX, evt.originalEvent.touches[0].pageY);
+                        }
+
+                        sel.trigger('freetrans.movestart');
+
+                        $(document).bind('mousemove.freetrans touchmove.freetrans', drag);
+                        $(document).bind('mouseup.freetrans touchend.freetrans', up);
                 })));
 
                 // rotate
-                rotator.bind('mousedown.freetrans', _ifLeft(_noSelect(function(evt) {
+                rotator.bind('mousedown.freetrans touchstart.freetrans', _ifLeft(_noSelect(function(evt) {
                         evt.stopPropagation();
 
                         var data = sel.data('freetrans'),
                         cen = _getBounds(data._p.divs.controls).center,
-                        pressang = Math.atan2(evt.pageY - cen.y, evt.pageX - cen.x) * 180 / Math.PI;
-                        rot = Number(data.angle);
+                        rot = Number(data.angle), pressang;
+
+                        if (evt.type === 'touchstart') {
+                            pressang = Math.atan2(evt.originalEvent.touches[0].pageY - cen.y, evt.originalEvent.touches[0].pageX - cen.x) * 180 / Math.PI;
+                        } else {
+                            pressang = Math.atan2(evt.pageY - cen.y, evt.pageX - cen.x) * 180 / Math.PI;
+                        }
 
                         var drag = _noSelect(function(evt) {
-                                var ang = Math.atan2(evt.pageY - cen.y, evt.pageX - cen.x) * 180 / Math.PI,
+                                var ang, d;
+                                if (evt.type === 'touchmove') {
+                                    ang = Math.atan2(evt.originalEvent.touches[0].pageY - cen.y, evt.originalEvent.touches[0].pageX - cen.x) * 180 / Math.PI;
+                                } else {
+                                    ang = Math.atan2(evt.pageY - cen.y, evt.pageX - cen.x) * 180 / Math.PI;
+                                }
+
                                 d = rot + ang - pressang;
 
                                 if(evt.shiftKey) d = (d/15>>0) * 15;
@@ -234,16 +269,19 @@
                         });
 
                         var up = function(evt) {
-                                $(document).unbind('mousemove.freetrans', drag);
-                                $(document).unbind('mouseup.freetrans', up);
+                                $(document).unbind('mousemove.freetrans touchmove.freetrans', drag);
+                                $(document).unbind('mouseup.freetrans touchend.freetrans', up);
+                                sel.trigger('freetrans.done');
                         };
 
-                        $(document).bind('mousemove.freetrans', drag);
-                        $(document).bind('mouseup.freetrans', up);
+                        sel.trigger('freetrans.rotatestart');
+
+                        $(document).bind('mousemove.freetrans touchmove.freetrans', drag);
+                        $(document).bind('mouseup.freetrans touchend.freetrans', up);
                 })));
 
                 // scale
-                container.find('.ft-scaler').bind('mousedown.freetrans', _ifLeft(_noSelect(function(evt) {
+                container.find('.ft-scaler').bind('mousedown.freetrans touchstart.freetrans', _ifLeft(_noSelect(function(evt) {
                         evt.stopPropagation();
 
                         /**
@@ -254,10 +292,15 @@
                          */
 
                         var scaleLimit = settings.scaleLimit;
+                        var target = $(evt.target);
+
+                        if (target.is('span')) {
+                          target = target.parent('.ft-scaler');
+                        }
 
                         var anchor, scaleMe, doPosition, mp, doy, dox,
                         data = sel.data('freetrans'),
-                        handle = $(evt.target),
+                        handle = target,
                         wid = controls.width(),
                         hgt = controls.height(),
                         ratio = wid/hgt,
@@ -297,7 +340,7 @@
                                 positionMe = function() {
                                         doPosition(anchor, container.find('.ft-scaler-tl').offset());
                                 };
-                                
+
                         } else if (handle.is(tl) || handle.is(ml)) {
                                 anchor = br_off;
                                 doy = handle.is(tl);
@@ -356,9 +399,14 @@
                         }
 
                         var drag = _noSelect(function(evt) {
+                                var disableRatio = false;
 
-                                if(evt.altKey) {
+                                if(evt.altKey || settings.scaleFromCenter) {
                                         anchor = c_off;
+
+                                        if (handle.is(mr) || handle.is(ml) || handle.is(tc) || handle.is(bc)) {
+                                          disableRatio = true;
+                                        }
 
                                         if (handle.is(br) || handle.is(mr)) {
                                                 scaleMe = function(mp) {
@@ -404,10 +452,15 @@
                                         };
                                 }
 
-                                if (scaleMe) {
-                                        scaleMe(Point(evt.pageX, evt.pageY));
 
-                                        if(evt.shiftKey || settings.maintainAspectRatio) {
+                                if (scaleMe) {
+                                        if (evt.type === 'touchmove') {
+                                            scaleMe(Point(evt.originalEvent.touches[0].pageX, evt.originalEvent.touches[0].pageY));
+                                        } else {
+                                            scaleMe(Point(evt.pageX, evt.pageY));
+                                        }
+
+                                        if(evt.shiftKey || (settings.maintainAspectRatio) && disableRatio === false) {
                                                 if(!handle.hasClass('ft-scaler-center')) {
                                                         data.scaley = ((owid*data.scalex)*(1/ratio))/ohgt;
 
@@ -445,12 +498,16 @@
 
                         var up = function(evt) {
                                 _draw(sel, data);
-                                $(document).unbind('mousemove.freetrans', drag);
-                                $(document).unbind('mouseup.freetrans', up);
+                                $(document).unbind('mousemove.freetrans touchmove.freetrans', drag);
+                                $(document).unbind('mouseup.freetrans touchend.freetrans', up);
+                                sel.trigger('freetrans.done');
+
                         };
 
-                        $(document).bind('mousemove.freetrans', drag);
-                        $(document).bind('mouseup.freetrans', up);
+                        sel.trigger('freetrans.scalestart');
+
+                        $(document).bind('mousemove.freetrans touchmove.freetrans', drag);
+                        $(document).bind('mouseup.freetrans touchend.freetrans', up);
                 })));
 
                 sel.css({position: 'absolute'});
@@ -458,7 +515,7 @@
 
         function _ifLeft(callback) {
                 return function(evt) {
-                        if (evt.which === 1) {
+                        if (evt.which === 1 || evt.type === 'touchstart') {
                                 return callback(evt);
                         }
                 };
@@ -479,6 +536,7 @@
                 for(var el in data._p.divs) data._p.divs[el].unbind('.freetrans');
                 data._p.divs.container.replaceWith(sel);
                 sel.removeData('freetrans');
+                sel.removeClass('ft-widget');
         }
 
         function _getOptions(sel) {
@@ -702,6 +760,8 @@
 
                                 tstr = _matrixToCSS(Matrix().rotate(-data._p.rad));
                                 _setTransform(data._p.divs.rotator[0], tstr);
+                                _setTransform($(el).find('.ui-layers-handle')[0], tstr);
+                                _setTransform($(el).find('.ui-layers-dropdown')[0], tstr);
                                 _setTransformOrigin(data._p.divs.rotator[0], data['rot-origin']);
 
                                 data._p.prev.controls = data._p.controls;
